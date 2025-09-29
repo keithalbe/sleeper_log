@@ -3,6 +3,8 @@ import json
 from datetime import datetime
 from collections import defaultdict, Counter
 import numpy as np
+import os
+import argparse
 
 class SleeperCLI:
     def __init__(self, league_id):
@@ -208,21 +210,21 @@ class SleeperCLI:
     def create_ascii_header(self):
         """Create ASCII art header"""
         header = f"""
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                                                                               ║
-║    ███████ ██      ███████ ███████ ██████  ███████ ██████       ██████ ██     ██║
-║    ██      ██      ██      ██      ██   ██ ██      ██   ██     ██      ██     ██║
-║    ███████ ██      █████   █████   ██████  █████   ██████      ██      ██     ██║
-║         ██ ██      ██      ██      ██      ██      ██   ██     ██      ██     ██║
-║    ███████ ███████ ███████ ███████ ██      ███████ ██   ██      ██████ ███████║
-║                                                                               ║
-║                          🏈 FANTASY FOOTBALL REPORT 🏆                        ║
-║                                                                               ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
+           /ZZ                                                    /ZZ                    
+          | ZZ                                                   | ZZ                    
+  /ZZZZZZZ| ZZ  /ZZZZZZ   /ZZZZZZ   /ZZZZZZ   /ZZZZZZ   /ZZZZZZ  | ZZ  /ZZZZZZ   /ZZZZZZ 
+ /ZZ_____/| ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ | ZZ /ZZ__  ZZ /ZZ__  ZZ
+|  ZZZZZZ | ZZ| ZZZZZZZZ| ZZZZZZZZ| ZZ  \ ZZ| ZZZZZZZZ| ZZ  \__/ | ZZ| ZZ  \ ZZ| ZZ  \ ZZ
+ \____  ZZ| ZZ| ZZ_____/| ZZ_____/| ZZ  | ZZ| ZZ_____/| ZZ       | ZZ| ZZ  | ZZ| ZZ  | ZZ
+ /ZZZZZZZ/| ZZ|  ZZZZZZZ|  ZZZZZZZ| ZZZZZZZ/|  ZZZZZZZ| ZZ       | ZZ|  ZZZZZZ/|  ZZZZZZZ
+|_______/ |__/ \_______/ \_______/| ZZ____/  \_______/|__//ZZZZZZ|__/ \______/  \____  ZZ
+                                  | ZZ                   |______/               /ZZ  \ ZZ
+                                  | ZZ                                         |  ZZZZZZ/
+                                  |__/                                          \______/ 
 
 🏟️ League: {self.league_data.get('name', 'Fantasy League')}
 📅 Season: {self.league_data.get('season', '2024')}
-⏰ Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
+⏰ Generated: {datetime.now().strftime('%B %d, %Y at %I:%M` %p')}
 📊 Current Week: {self.current_week}
 
 """
@@ -780,8 +782,17 @@ def main():
     
     """)
     
-    # League ID
-    league_id = "<league id>"
+    # Accept the league ID via the --league_id flag or an environment variable
+    parser = argparse.ArgumentParser(description="Generate Sleeper fantasy football reports")
+    parser.add_argument("--league-id", "-l", dest="league_id", help="Sleeper league ID (overrides LEAGUE_ID env var)")
+    args = parser.parse_args()
+    
+    league_id = args.league_id or os.getenv("LEAGUE_ID")
+    if not league_id:
+        print("No league ID provided. Set LEAGUE_ID env var or pass --league-id.")
+        print("Example (zsh): export LEAGUE_ID=123456789012345678")
+        print("Or run: python sleeper_log.py --league-id 123456789012345678")
+        return
     
     try:
         # Create report generator
