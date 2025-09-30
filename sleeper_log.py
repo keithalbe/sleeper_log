@@ -29,6 +29,7 @@ class SleeperCLI:
         self.players = {}
         self.current_week = 1
         self.max_week_with_data = 0
+        self.draft_picks = []
         self.winners_bracket = []
         
     def fetch_league_data(self):
@@ -93,6 +94,33 @@ class SleeperCLI:
             except Exception:
                 self.winners_bracket = []
         
+        # Get draft data
+        print("📋 Fetching draft data...")
+        draft_url = f"{self.base_url}/league/{self.league_id}/drafts"
+        draft_response = requests.get(draft_url)
+        if draft_response.status_code == 200:
+            try:
+                drafts = draft_response.json()
+                if drafts:
+                    # Get the most recent draft
+                    latest_draft = drafts[0]
+                    draft_id = latest_draft.get('draft_id')
+                    if draft_id:
+                        picks_url = f"{self.base_url}/draft/{draft_id}/picks"
+                        picks_response = requests.get(picks_url)
+                        if picks_response.status_code == 200:
+                            self.draft_picks = picks_response.json()
+                        else:
+                            self.draft_picks = []
+                    else:
+                        self.draft_picks = []
+                else:
+                    self.draft_picks = []
+            except Exception:
+                self.draft_picks = []
+        else:
+            self.draft_picks = []
+        
         print("✅ Data fetch complete!")
     
     def get_team_name(self, roster_id):
@@ -138,11 +166,14 @@ class SleeperCLI:
             losses = roster.get('settings', {}).get('losses', 0)
             ties = roster.get('settings', {}).get('ties', 0)
             
-            # Calculate points from matchups
-            for week_matchups in self.matchups.values():
+            # Calculate points from matchups (only completed games)
+            for week, week_matchups in self.matchups.items():
                 for matchup in week_matchups:
                     if matchup['roster_id'] == roster['roster_id']:
-                        total_points += matchup.get('points', 0)
+                        points = matchup.get('points', 0)
+                        # Only count points from completed games
+                        if points > 0 and week <= self.max_week_with_data:
+                            total_points += points
             
             standings.append({
                 'team': team_name,
@@ -173,8 +204,10 @@ class SleeperCLI:
             for matchup in week_matchups:
                 team_name = self.get_team_name(matchup['roster_id'])
                 points = matchup.get('points', 0)
-                weekly_scores[team_name].append(points)
-                week_scores.append((team_name, points))
+                # Only include scores from completed games (both teams scored > 0 or week is completed)
+                if points > 0 and week <= self.max_week_with_data:
+                    weekly_scores[team_name].append(points)
+                    week_scores.append((team_name, points))
             
             if week_scores:
                 week_scores.sort(key=lambda x: x[1], reverse=True)
@@ -185,12 +218,15 @@ class SleeperCLI:
         consistency_stats = {}
         for team, scores in weekly_scores.items():
             if scores:
-                consistency_stats[team] = {
-                    'avg': np.mean(scores),
-                    'std': np.std(scores),
-                    'high': max(scores),
-                    'low': min(scores)
-                }
+                # Only use scores from completed games
+                completed_scores = [s for s in scores if s > 0]
+                if completed_scores:
+                    consistency_stats[team] = {
+                        'avg': np.mean(completed_scores),
+                        'std': np.std(completed_scores),
+                        'high': max(completed_scores),
+                        'low': min(completed_scores)
+                    }
         
         most_consistent = min(consistency_stats.items(), 
                             key=lambda x: x[1]['std']) if consistency_stats else None
@@ -303,9 +339,9 @@ class SleeperCLI:
                         break
                 
                 if team_matchup:
-                    # Find opponent's score
-                    matchup_id = team_matchup.get('matchup_id')
+                    # Check if game has been played (both teams have scores > 0 or it's past the week)
                     team_points = team_matchup.get('points', 0)
+                    matchup_id = team_matchup.get('matchup_id')
                     opponent_points = 0
                     
                     for matchup in week_matchups:
@@ -314,13 +350,17 @@ class SleeperCLI:
                             opponent_points = matchup.get('points', 0)
                             break
                     
-                    # Determine win/loss
-                    if team_points > opponent_points:
-                        weekly_results.append('W')
-                    elif team_points < opponent_points:
-                        weekly_results.append('L')
+                    # Only count as played if both teams have scores > 0 AND it's a completed week
+                    if (team_points > 0 and opponent_points > 0) and week <= self.max_week_with_data:
+                        # Determine win/loss
+                        if team_points > opponent_points:
+                            weekly_results.append('W')
+                        elif team_points < opponent_points:
+                            weekly_results.append('L')
+                        else:
+                            weekly_results.append('T')  # Tie
                     else:
-                        weekly_results.append('T')  # Tie
+                        weekly_results.append('-')  # Game not played yet
                 else:
                     weekly_results.append('-')  # No game data
             else:
@@ -338,8 +378,9 @@ class SleeperCLI:
 | ZZ                                    \033[1mSTANDINGS\033[0m                                        ZZ
 | ZZ                                                                                     ZZ
 | ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-| ZZ                                                                                     ZZ
-| ZZ  Rnk|Team Name    |1 |2 |3 |4 |5 |6 |7 |8 |9 |10|11|12|13|14|15|16|17|Rec |Pnts     ZZ"""
+|_________________________________________________________________________________________/
+
+      Rnk|Team         |1 |2 |3 |4 |5 |6 |7 |8 |9 |10|11|12|13|14|15|16|17|Rec |Pnts"""
         
         for i, team in enumerate(standings):
             rank = i + 1
@@ -376,16 +417,11 @@ class SleeperCLI:
             
             points_str = f"{team['points_for']:06.1f}"
             output += (
-                f"\n| ZZ  {rank_display}|{team_name:<12} |{game_log}"
-                f"{record:<4}|{points_str:<6}   ZZ"
+                f"\n      {rank_display}|{team_name:<12} |{game_log}"
+                f"{record:<4}|{points_str:<6}"
             )
         
-        output += """
-| ZZ                                                                                     ZZ
-| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-|_________________________________________________________________________________________/
-"""
-        
+        output += "\n"
         return output
     
     def convert_ansi_to_html(self, text):
@@ -394,10 +430,17 @@ class SleeperCLI:
         text = text.replace('\033[92m', '<span style="color: #00ff00;">')  # Green
         text = text.replace('\033[91m', '<span style="color: #ff0000;">')  # Red  
         text = text.replace('\033[93m', '<span style="color: #ffff00;">')  # Yellow
+        text = text.replace('\033[32m', '<span style="color: #00ff00;">')  # Green (32)
         # Bold start/end
         text = text.replace('\033[1m', '<b>')
         # Reset closes bold and color span if present
         text = text.replace('\033[0m', '</b></span>')
+        
+        # Convert spaces to non-breaking spaces to preserve alignment
+        # Replace multiple spaces with &nbsp; to maintain spacing
+        import re
+        text = re.sub(r' {2,}', lambda m: '&nbsp;' * len(m.group()), text)
+        
         return text
     
     def generate_html_report(self, filename="sleeper_report.html"):
@@ -409,9 +452,10 @@ class SleeperCLI:
         text_report += self.create_ascii_header()
         text_report += self.create_standings_table()
         text_report += self.create_leaders_section()
-        text_report += self.create_fun_stats()
-        text_report += self.create_playoff_picture()
         text_report += self.create_roster_section()
+        text_report += self.create_schedule_section()
+        text_report += self.create_playoff_picture()
+        text_report += self.create_draft_summary()
         
         # Footer
         commit_hash = get_git_commit_hash()
@@ -420,7 +464,7 @@ class SleeperCLI:
 | ZZ                                                                                     ZZ
 | ZZ                      Generated by \033[1msleeper_log\033[0m commit \033[1m#{commit_hash}\033[0m                       ZZ
 | ZZ                      https://github.com/keithalbe/sleeper_log                       ZZ
-| ZZ                      Vibe coded w/: \033[1mSonnet 4|4.5\033[0m, \033[1mGPT-5\033[0m, \033[1mCursor\033[0m                       ZZ
+| ZZ                      Vibe coded with: \033[1mSonnet 4\033[0m, \033[1mGPT-5\033[0m, \033[1mCursor\033[0m                       ZZ
 | ZZ                                                                                     ZZ
 | ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
 |_________________________________________________________________________________________/
@@ -530,7 +574,7 @@ class SleeperCLI:
         output = """
  /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]
 | ZZ                                                                                     ZZ
-| ZZ                                 \033[1mLEAGUE LEADERS\033[0m                                      ZZ
+| ZZ                                  \033[1mLEAGUE ANALYTICS\033[0m                                   ZZ
 | ZZ                                                                                     ZZ
 | ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
 |_________________________________________________________________________________________/
@@ -540,53 +584,84 @@ class SleeperCLI:
         # Highest Scorer
         if leaders['highest_scorer']:
             hs = leaders['highest_scorer']
-            output += f"🔥 HIGHEST SCORER: {hs['team']}\n"
-            output += f"   └─ {hs['points_for']:.1f} total points\n\n"
+            output += f"     🔥 HIGHEST SCORER: {hs['team']}\n"
+            output += f"        └─ {hs['points_for']:.1f} total points\n\n"
         
         # Most Consistent
         if leaders['most_consistent']:
             team, stats = leaders['most_consistent']
-            output += f"📈 MOST CONSISTENT: {team}\n"
-            output += f"   └─ {stats['avg']:.1f} avg ± {stats['std']:.1f} std dev\n\n"
+            output += f"     📈 MOST CONSISTENT: {team}\n"
+            output += f"        └─ {stats['avg']:.1f} avg ± {stats['std']:.1f} std dev\n\n"
         
         # Most Volatile
         if leaders['most_volatile']:
             team, stats = leaders['most_volatile']
-            output += f"🎢 BOOM OR BUST: {team}\n"
-            output += f"   └─ {stats['high']:.1f} high, {stats['low']:.1f} low (±{stats['std']:.1f})\n\n"
+            output += f"     🎢 BOOM OR BUST: {team}\n"
+            output += f"        └─ {stats['high']:.1f} high, {stats['low']:.1f} low (±{stats['std']:.1f})\n\n"
         
         # Over-performers
         if leaders['over_performers']:
-            output += "🚀 OVER-PERFORMERS (Lucky with record vs points):\n"
+            output += "     🚀 OVER-PERFORMERS (Lucky with record vs points):\n"
             for perf in leaders['over_performers'][:3]:  # Top 3
-                output += f"   {perf['team'][:25]}: {perf['actual_wins']}-{perf['games_played']-perf['actual_wins']} record (+{perf['difference']:.1f} wins above expected)\n"
+                output += f"        {perf['team'][:25]}: {perf['actual_wins']}-{perf['games_played']-perf['actual_wins']} record (+{perf['difference']:.1f} wins above expected)\n"
             output += "\n"
         
         # Under-performers  
         if leaders['under_performers']:
-            output += "😤 UNDER-PERFORMERS (Unlucky with record vs points):\n"
+            output += "     😤 UNDER-PERFORMERS (Unlucky with record vs points):\n"
             for perf in leaders['under_performers'][:3]:  # Bottom 3
-                output += f"   {perf['team'][:25]}: {perf['actual_wins']}-{perf['games_played']-perf['actual_wins']} record ({perf['difference']:.1f} wins below expected)\n"
+                output += f"        {perf['team'][:25]}: {perf['actual_wins']}-{perf['games_played']-perf['actual_wins']} record ({perf['difference']:.1f} wins below expected)\n"
             output += "\n"
 
         # Streaks
         if leaders.get('longest_win_streak'):
             team, length = leaders['longest_win_streak']
-            output += f"🔥 LONGEST WIN STREAK: {team} — {length} in a row\n"
+            output += f"     🔥 LONGEST WIN STREAK: {team} — {length} in a row\n"
         if leaders.get('longest_loss_streak'):
             team, length = leaders['longest_loss_streak']
-            output += f"💤 LONGEST LOSING STREAK: {team} — {length} in a row\n"
+            output += f"     💤 LONGEST LOSING STREAK: {team} — {length} in a row\n"
         if leaders.get('longest_win_streak') or leaders.get('longest_loss_streak'):
             output += "\n"
         
         # Weekly highs
         if leaders['weekly_highs']:
-            output += "🚀 WEEKLY HIGH SCORES:\n"
+            output += "     🚀 WEEKLY HIGH SCORES:\n"
             for week, (team, score) in sorted(leaders['weekly_highs'].items()):
                 # Show only weeks we have data for
                 if self.max_week_with_data and week <= self.max_week_with_data:
-                    output += f"   Week {week:2}: {team[:20]} ({score:.1f} pts)\n"
+                    output += f"        └─ Week {week:2}: {team[:20]} ({score:.1f} pts)\n"
+            
+        
+        # Advanced Stats
+        if leaders['consistency_stats']:
+            all_averages = [stats['avg'] for stats in leaders['consistency_stats'].values()]
+            league_average = np.mean(all_averages)
+            
+            output += f"     📊 LEAGUE AVERAGE SCORE: {league_average:.1f} points\n"
+            
+            # Teams above/below average
+            above_avg = sum(1 for avg in all_averages if avg > league_average)
+            below_avg = len(all_averages) - above_avg
+            
+            output += f"     📈 TEAMS ABOVE AVERAGE: {above_avg}\n"
+            output += f"     📉 TEAMS BELOW AVERAGE: {below_avg}\n"
             output += "\n"
+            
+            
+            # Score distribution
+            all_scores = []
+            for stats in leaders['consistency_stats'].values():
+                all_scores.extend([stats['high'], stats['low']])
+            
+            if all_scores:
+                output += f"     🎯 League High Score: {max(all_scores):.1f}\n"
+                output += f"     💀 League Low Score: {min(all_scores):.1f}\n"
+                output += f"     📊 Score Range: {max(all_scores) - min(all_scores):.1f} points\n"
+                
+        
+        # Matchup records
+        total_matchups = sum(len(matchups) // 2 for matchups in self.matchups.values())
+        output += f"     ⚔️ Total Matchups Played: {total_matchups}{'':<60}\n"
         
         return output
     
@@ -605,11 +680,23 @@ class SleeperCLI:
                     last_week_points = players_points.get(player_id, 0)
                     break
         
-        # Note: Sleeper API doesn't provide projections directly
-        # You'd need a third-party service for projections
-        # For now, we'll show "N/A" for projections
+        # For projections, use the most recent week with data for this player
+        # Look through all weeks to find the most recent non-zero score
+        for week in sorted(self.matchups.keys(), reverse=True):
+            if week in self.matchups:
+                week_matchups = self.matchups[week]
+                for matchup in week_matchups:
+                    if matchup['roster_id'] == roster_id:
+                        players_points = matchup.get('players_points', {})
+                        player_points = players_points.get(player_id, 0)
+                        if player_points > 0:
+                            projection = player_points
+                            return last_week_points, projection
         
-        return last_week_points, "N/A"
+        # If no historical data, use last week's points as projection
+        projection = last_week_points if last_week_points > 0 else 0.0
+        
+        return last_week_points, projection
     
     def create_roster_section(self):
         """Create team rosters section with side-by-side format"""
@@ -632,158 +719,111 @@ class SleeperCLI:
             reserve = roster.get('reserve', []) or []  # IR
             
             if not players:
-                output += f">> {team_name.upper()}\n"
-                output += "─" * 79 + "\n"
-                output += "No players found\n\n"
+                output += f"      \033[1m{team_name.upper()}\033[0m (0.0 pts)\n"
+                output += "      " + "─" * 79 + "\n"
+                output += "      No players found\n\n"
                 continue
             
-            # Prepare starters data
-            starter_lines = []
-            total_starter_points = 0
+            # Group all players by position
+            all_players = players + (reserve or [])
+            players_by_position = defaultdict(list)
             
-            if starters:
-                starter_positions = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF']
-                if len(starters) < len(starter_positions):
-                    starter_positions = starter_positions[:len(starters)]
-                
-                position_counts = {}
-                
-                for i, player_id in enumerate(starters):
-                    if player_id:  # Skip None/empty slots
-                        player_name = self.get_player_name(player_id)[:15]
-                        position, nfl_team = self.get_player_position_team(player_id)
-                        last_points, projection = self.get_player_stats(player_id, roster['roster_id'])
-                        
-                        # Determine display position
-                        if i < len(starter_positions):
-                            display_pos = starter_positions[i]
-                        else:
-                            if position not in position_counts:
-                                position_counts[position] = 1
-                                display_pos = position
-                            else:
-                                position_counts[position] += 1
-                                display_pos = f"{position}{position_counts[position]}"
-                        
-                        # Special handling for DEF
-                        if position == 'DEF':
-                            display_pos = 'DST'
-                        
-                        display_points = last_points if isinstance(last_points, (int, float)) else 0.0
-                        nfl_team_disp = nfl_team if isinstance(nfl_team, str) and nfl_team else '---'
-                        starter_lines.append(f"{display_pos:<4} :: {player_name:<15} ({nfl_team_disp:>3}) {display_points:>5.1f}")
-                        if isinstance(display_points, (int, float)):
-                            total_starter_points += display_points
-                    else:
-                        display_pos = starter_positions[i] if i < len(starter_positions) else "???"
-                        starter_lines.append(f"{display_pos:<4} :: {'[Empty]':<15} (---) {0:>5.1f}")
-            
-            # Prepare bench data (including IR as bench positions)
-            bench_lines = []
-            bench_players = [p for p in players if p not in starters and p not in taxi]
-            
-            # Add IR players to bench display
-            if reserve:
-                bench_players.extend(reserve)
-            
-            if bench_players:
-                bench_by_position = defaultdict(list)
-                ir_players = set(reserve) if reserve else set()
-                
-                for player_id in bench_players:
-                    player_name = self.get_player_name(player_id)[:15]
+            for player_id in all_players:
+                if player_id:
+                    player_name = self.get_player_name(player_id)
                     position, nfl_team = self.get_player_position_team(player_id)
                     last_points, projection = self.get_player_stats(player_id, roster['roster_id'])
                     
                     # Mark IR players
-                    if player_id in ir_players:
+                    if reserve and player_id in reserve:
                         player_name = f"{player_name} (IR)"
-                        player_name = player_name[:15]  # Re-truncate after adding (IR)
                     
-                    bench_by_position[position].append((player_name, nfl_team, last_points))
-                
-                # Display by position
-                for pos in ['QB', 'RB', 'WR', 'TE', 'K', 'DEF']:
-                    if pos in bench_by_position:
-                        players_in_pos = bench_by_position[pos]
-                        display_pos = 'DST' if pos == 'DEF' else pos
+                    players_by_position[position].append({
+                        'name': player_name,
+                        'team': nfl_team,
+                        'points': last_points,
+                        'projection': projection,
+                        'is_starter': player_id in (starters or [])
+                    })
+            
+            # Sort players within each position (starters first, then by points)
+            for pos in players_by_position:
+                players_by_position[pos].sort(key=lambda x: (not x['is_starter'], -(x['points'] or 0)), reverse=False)
+            
+            # Display by position
+            position_order = ['QB', 'RB', 'WR', 'TE', 'FLX', 'K', 'DEF']
+            total_starter_points = 0
+            
+            for pos in position_order:
+                if pos in players_by_position:
+                    players_in_pos = players_by_position[pos]
+                    if not players_in_pos:
+                        continue
+                    
+                    # Position header
+                    pos_display = 'DEF' if pos == 'DEF' else pos
+                    output += f"      {pos_display:<3} :: "
+                    
+                    # Group players into lines of 3
+                    for i, player in enumerate(players_in_pos):
+                        if i > 0 and i % 3 == 0:
+                            # New line, indent to align with names
+                            output += "\n      " + " " * 7
                         
-                        if len(players_in_pos) == 1:
-                            name, team, points = players_in_pos[0]
-                            points_value = points if isinstance(points, (int, float)) else 0.0
-                            team_disp = team if isinstance(team, str) and team else '---'
-                            bench_lines.append(f"{display_pos:<4} :: {name:<15} ({team_disp:>3}) {points_value:>5.1f}")
+                        # Format player name and projection
+                        name = player['name'][:15]  # Allow longer names
+                        projection = player['projection'] if isinstance(player['projection'], (int, float)) else 0.0
+                        proj_str = f"({projection:03.1f})"
+                        
+                        # Color the starter green and bold
+                        if player['is_starter']:
+                            padded_name = f"\033[1m\033[32m{name:<15}\033[0m"  # Bold green
+                            total_starter_points += projection
                         else:
-                            # Multiple players - put first one with position, others indented
-                            name, team, points = players_in_pos[0]
-                            points_value = points if isinstance(points, (int, float)) else 0.0
-                            team_disp = team if isinstance(team, str) and team else '---'
-                            bench_lines.append(f"{display_pos:<4} :: {name:<15} ({team_disp:>3}) {points_value:>5.1f}")
-                            for name, team, points in players_in_pos[1:]:
-                                points_value = points if isinstance(points, (int, float)) else 0.0
-                                team_disp = team if isinstance(team, str) and team else '---'
-                                bench_lines.append(f"{'':>4}    {name:<15} ({team_disp:>3}) {points_value:>5.1f}")
-                
-                # Handle other positions
-                for pos, players_in_pos in bench_by_position.items():
-                    if pos not in ['QB', 'RB', 'WR', 'TE', 'K', 'DEF']:
-                        for name, team, points in players_in_pos:
-                            points_value = points if isinstance(points, (int, float)) else 0.0
-                            team_disp = team if isinstance(team, str) and team else '---'
-                            bench_lines.append(f"{pos:<4} :: {name:<15} ({team_disp:>3}) {points_value:>5.1f}")
+                            padded_name = f"{name:<15}"
+                        
+                        # Add player to line with proper alignment (fixed width for names and projections)
+                        # Pad the name to 20 characters, then add the projection
+                        if i % 3 == 2:  # Last player on line
+                            output += f"{padded_name} {proj_str:<6}"
+                        else:  # Not last player, add spacing
+                            output += f"{padded_name} {proj_str:<6}  "
+                    
+                    output += "\n"
             
-            # Output side-by-side
-            output += f">> STARTING LINEUP :: {team_name.upper()}"
-            if bench_lines:
-                padding = " " * (47 - len(f">> STARTING LINEUP :: {team_name.upper()}"))
-                output += f"{padding}>> BENCH :: {team_name.upper()}\n"
-            else:
-                output += "\n"
+            # Handle other positions not in the main order
+            for pos, players_in_pos in players_by_position.items():
+                if pos not in position_order and players_in_pos:
+                    output += f"      {pos:<3} :: "
+                    
+                    for i, player in enumerate(players_in_pos):
+                        if i > 0 and i % 3 == 0:
+                            output += "\n      " + " " * 7
+                        
+                        name = player['name'][:15]
+                        projection = player['projection'] if isinstance(player['projection'], (int, float)) else 0.0
+                        proj_str = f"({projection:04.1f})"
+                        
+                        if player['is_starter']:
+                            name = f"\033[1m\033[32m{name}\033[0m"  # Bold green
+                            total_starter_points += projection
+                        
+                        # Pad the name to 20 characters, then add the projection
+                        padded_name = f"{name:<20}"
+                        if i % 3 == 2:
+                            output += f"{padded_name} {proj_str:<8}"
+                        else:
+                            output += f"{padded_name} {proj_str:<8}  "
+                    
+                    output += "\n"
             
-            output += "─" * 47
-            if bench_lines:
-                output += " " + "─" * 31 + "\n"
-            else:
-                output += "\n"
-            
-            # Display lines side by side
-            max_lines = max(len(starter_lines), len(bench_lines))
-            
-            for i in range(max_lines):
-                # Starter line
-                if i < len(starter_lines):
-                    starter_line = starter_lines[i]
-                else:
-                    starter_line = " " * 47
-                
-                output += starter_line
-                
-                # Bench line
-                if i < len(bench_lines):
-                    bench_line = bench_lines[i]
-                    # Pad starter line to 47 chars if needed
-                    if len(starter_line) < 47:
-                        output += " " * (47 - len(starter_line))
-                    output += " " + bench_line
-                
-                output += "\n"
-            
-            # Bottom separator and team projection
-            output += "─" * 47
-            if bench_lines:
-                output += " " + "─" * 31 + "\n"
-            else:
-                output += "\n"
-            
-            output += f"TEAM PROJECTION: {total_starter_points:.1f} pts"
-            if bench_lines:
-                output += " " * (47 - len(f"TEAM PROJECTION: {total_starter_points:.1f} pts"))
-            output += "\n\n"
+            # Print team name header with projection after calculating total
+            output += f"      \033[1m{team_name.upper()}\033[0m ({total_starter_points:.1f} pts)\n\n"
             
             # TAXI (for dynasty leagues) - full width
             if taxi:
-                output += f">> TAXI SQUAD :: {team_name.upper()}\n"
-                output += "─" * 47 + "\n"
+                output += f"      >> TAXI SQUAD :: {team_name.upper()}\n"
+                output += "      " + "─" * 47 + "\n"
                 
                 for player_id in taxi:
                     player_name = self.get_player_name(player_id)[:15]
@@ -793,9 +833,9 @@ class SleeperCLI:
                     display_pos = 'DST' if position == 'DEF' else position
                     taxi_points = last_points if isinstance(last_points, (int, float)) else 0.0
                     nfl_team_disp = nfl_team if isinstance(nfl_team, str) and nfl_team else '---'
-                    output += f"{display_pos:<4} :: {player_name:<15} ({nfl_team_disp:>3}) {taxi_points:>5.1f}\n"
+                    output += f"      {display_pos:<4} :: {player_name:<15} ({nfl_team_disp:>3}) {taxi_points:>5.1f}\n"
                 
-                output += "─" * 47 + "\n\n"
+                output += "      " + "─" * 47 + "\n\n"
             
         return output
     
@@ -842,7 +882,7 @@ class SleeperCLI:
         output += f"⚔️ Total Matchups Played: {total_matchups}\n"
         
         return output
-
+    
     def create_playoff_picture(self):
         """Render playoff teams and bracket picture if available"""
         output = """
@@ -856,7 +896,7 @@ class SleeperCLI:
 """
 
         if not self.winners_bracket:
-            output += "No playoff bracket data available.\n\n"
+            output += "      No playoff bracket data available.\n\n"
             return output
 
         # Build seed map from standings order (best to worst)
@@ -879,8 +919,6 @@ class SleeperCLI:
         # Render each round
         for rnd in sorted(rounds.keys()):
             games = sorted(rounds[rnd], key=lambda x: x.get('matchup_id', 0))
-            output += f"Round {rnd}\n"
-            output += "-" * 79 + "\n"
             for g in games:
                 t1 = rosterid_to_team.get(g.get('t1'), f"R{g.get('t1')}")
                 t2 = rosterid_to_team.get(g.get('t2'), f"R{g.get('t2')}")
@@ -891,12 +929,128 @@ class SleeperCLI:
                 winner_team = rosterid_to_team.get(winner_roster, '?')
                 seed1 = team_to_seed.get(t1, '-')
                 seed2 = team_to_seed.get(t2, '-')
-                line = f"({seed1}) {t1:<20} {s1:>6.1f}  vs  ({seed2}) {t2:<20} {s2:>6.1f}  =>  \033[1m{winner_team}\033[0m\n"
+                # Truncate team names to 15 characters
+                t1_short = t1[:15]
+                t2_short = t2[:15]
+                winner_short = winner_team[:15]
+                line = f"      ({seed1}) {t1_short:<15} {s1:>6.1f}  vs  ({seed2}) {t2_short:<15} {s2:>6.1f}  =>  \033[1m{winner_short}\033[0m\n"
                 output += line
             output += "\n"
 
         return output
     
+    def create_draft_summary(self):
+        """Create draft summary section"""
+        output = """
+ /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]
+| ZZ                                                                                     ZZ
+| ZZ                                  \033[1mDRAFT SUMMARY\033[0m                                      ZZ
+| ZZ                                                                                     ZZ
+| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+|_________________________________________________________________________________________/
+
+"""
+        
+        if not self.draft_picks:
+            output += "      No draft data available.\n\n"
+            return output
+        
+        # Group picks by team
+        picks_by_team = defaultdict(list)
+        for pick in self.draft_picks:
+            roster_id = pick.get('roster_id')
+            if roster_id:
+                picks_by_team[roster_id].append(pick)
+        
+        # Sort picks by round and pick number
+        for roster_id in picks_by_team:
+            picks_by_team[roster_id].sort(key=lambda x: (x.get('round', 0), x.get('pick_no', 0)))
+        
+        # Display picks by team
+        for roster_id in sorted(picks_by_team.keys()):
+            team_name = self.get_team_name(roster_id)
+            picks = picks_by_team[roster_id]
+            
+            output += f"      \033[1m{team_name.upper()}\033[0m\n"
+            
+            # Group picks into lines of 3
+            for i in range(0, len(picks), 3):
+                line_picks = picks[i:i+3]
+                line = "      "
+                
+                for pick in line_picks:
+                    round_num = pick.get('round', 0)
+                    pick_num = pick.get('pick_no', 0)
+                    player_id = pick.get('player_id')
+                    
+                    if player_id and player_id in self.players:
+                        player_name = self.players[player_id].get('full_name', 'Unknown')[:12]
+                        position = "(" + self.players[player_id].get('position', 'UNK') + ")"
+                        line += f"R{round_num:<02}.{pick_num:03d} {player_name:<12} {position:<5} "
+                    else:
+                        line += f"R{round_num:<02}.{pick_num:03d} {'Unknown':<12} (UNK) "
+                
+                output += line.rstrip() + "\n"
+            
+            output += "\n"
+        
+        return output
+    
+    def create_schedule_section(self):
+        """Create schedule section showing weekly matchups"""
+        output = """
+ /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]
+| ZZ                                                                                     ZZ
+| ZZ                                   \033[1mSCHEDULE\033[0m                                         ZZ
+| ZZ                                                                                     ZZ
+| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
+|_________________________________________________________________________________________/
+
+"""
+        
+        if not self.matchups:
+            output += "      No schedule data available.\n\n"
+            return output
+        
+        # Display each week's matchups
+        for week in sorted(self.matchups.keys()):
+            week_matchups = self.matchups[week]
+            if not week_matchups:
+                continue
+                
+            output += f"      \033[1mWeek {week}\033[0m\n"
+            
+            # Group matchups by matchup_id
+            matchup_groups = defaultdict(list)
+            for matchup in week_matchups:
+                matchup_id = matchup.get('matchup_id', 0)
+                matchup_groups[matchup_id].append(matchup)
+            
+            # Display each matchup
+            for matchup_id in sorted(matchup_groups.keys()):
+                matchup_teams = matchup_groups[matchup_id]
+                if len(matchup_teams) >= 2:
+                    team1 = matchup_teams[0]
+                    team2 = matchup_teams[1]
+                    
+                    team1_name = self.get_team_name(team1['roster_id'])[:25]
+                    team2_name = self.get_team_name(team2['roster_id'])[:25]
+                    
+                    team1_points = team1.get('points', 0)
+                    team2_points = team2.get('points', 0)
+                    
+                    # Color the winner
+                    if team1_points > team2_points:
+                        output += f"      \033[1m\033[32m{team1_name:<25}\033[0m {team1_points:>6.1f}  vs  {team2_name:<25} {team2_points:>6.1f}\n"
+                    elif team2_points > team1_points:
+                        output += f"      {team1_name:<25} {team1_points:>6.1f}  vs  \033[1m\033[32m{team2_name:<25}\033[0m {team2_points:>6.1f}\n"
+                    else:
+                        output += f"      {team1_name:<25} {team1_points:>6.1f}  vs  {team2_name:<25} {team2_points:>6.1f}\n"
+
+            output += "\n"
+        
+        return output
+
 def main():
     print("""
                     
