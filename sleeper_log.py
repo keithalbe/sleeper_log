@@ -590,7 +590,7 @@ class SleeperCLI:
         # Most Consistent
         if leaders['most_consistent']:
             team, stats = leaders['most_consistent']
-            output += f"     📈 MOST CONSISTENT: {team}\n"
+            output += f"     🪨 MOST CONSISTENT: {team}\n"
             output += f"        └─ {stats['avg']:.1f} avg ± {stats['std']:.1f} std dev\n\n"
         
         # Most Volatile
