@@ -1023,8 +1023,9 @@ class SleeperCLI:
             # Group matchups by matchup_id
             matchup_groups = defaultdict(list)
             for matchup in week_matchups:
-                matchup_id = matchup.get('matchup_id', 0)
-                matchup_groups[matchup_id].append(matchup)
+                matchup_id = matchup.get('matchup_id')
+                if matchup_id is not None:
+                    matchup_groups[matchup_id].append(matchup)
             
             # Display each matchup
             for matchup_id in sorted(matchup_groups.keys()):
