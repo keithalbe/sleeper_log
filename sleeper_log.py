@@ -154,6 +154,15 @@ class SleeperCLI:
         player = self.players[player_id]
         return player.get('position', 'UNK'), player.get('team', 'UNK')
     
+    # Create a section header with a centered title
+    def create_section_header(self, title):
+        return f" /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]\n" \
+                "| ZZ                                                                                     ZZ\n" \
+               f"| ZZ{title:^93}ZZ\n"                                                                           \
+                "| ZZ                                                                                     ZZ\n" \
+                "| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n" \
+                "|_________________________________________________________________________________________/\n\n"
+
     def calculate_standings(self):
         """Calculate current standings"""
         standings = []
@@ -307,21 +316,17 @@ class SleeperCLI:
         }
     
     def create_ascii_header(self):
-        """Create ASCII art header"""
-        header = f"""
-            /ZZ  \033[1mLEAGUE:\033[0m {self.league_data.get('name', '?'):<39}   /ZZ                    
-           | ZZ  \033[1mSEASON:\033[0m {self.league_data.get('season', '?'):<41}| ZZ                    
-   /ZZZZZZZ| ZZ  /ZZZZZZ   /ZZZZZZ   /ZZZZZZ   /ZZZZZZ   /ZZZZZZ  | ZZ  /ZZZZZZ   /ZZZZZZ 
-  /ZZ_____/| ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ | ZZ /ZZ__  ZZ /ZZ__  ZZ
- |  ZZZZZZ | ZZ| ZZZZZZZZ| ZZZZZZZZ| ZZ  \ ZZ| ZZZZZZZZ| ZZ  \__/ | ZZ| ZZ  \ ZZ| ZZ  \ ZZ
-  \____  ZZ| ZZ| ZZ_____/| ZZ_____/| ZZ  | ZZ| ZZ_____/| ZZ       | ZZ| ZZ  | ZZ| ZZ  | ZZ
-  /ZZZZZZZ/| ZZ|  ZZZZZZZ|  ZZZZZZZ| ZZZZZZZ/|  ZZZZZZZ| ZZ       | ZZ|  ZZZZZZ/|  ZZZZZZZ
- |_______/ |__/ \_______/ \_______/| ZZ____/  \_______/|__//ZZZZZZ|__/ \______/  \____  ZZ
-                                   | ZZ                   |______/               /ZZ  \ ZZ
-                                   | ZZ  \033[1mGEN :\033[0m {datetime.now().strftime('%b %d, %Y @%I:%M %p'):<33}|  ZZZZZZ/
-                                   |__/  \033[1mWEEK:\033[0m {self.current_week:0>2}                                \\______/
-"""
-        return header
+        return f"            /ZZ  \033[1mLEAGUE:\033[0m {self.league_data.get('name', '?'):<39}   /ZZ      \n" \
+               f"           | ZZ  \033[1mSEASON:\033[0m {self.league_data.get('season', '?'):<41}| ZZ      \n" \
+                "   /ZZZZZZZ| ZZ  /ZZZZZZ   /ZZZZZZ   /ZZZZZZ   /ZZZZZZ   /ZZZZZZ  | ZZ  /ZZZZZZ   /ZZZZZZ \n" \
+                "  /ZZ_____/| ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ | ZZ /ZZ__  ZZ /ZZ__  ZZ\n" \
+                " |  ZZZZZZ | ZZ| ZZZZZZZZ| ZZZZZZZZ| ZZ  \ ZZ| ZZZZZZZZ| ZZ  \__/ | ZZ| ZZ  \ ZZ| ZZ  \ ZZ\n" \
+                "  \____  ZZ| ZZ| ZZ_____/| ZZ_____/| ZZ  | ZZ| ZZ_____/| ZZ       | ZZ| ZZ  | ZZ| ZZ  | ZZ\n" \
+                "  /ZZZZZZZ/| ZZ|  ZZZZZZZ|  ZZZZZZZ| ZZZZZZZ/|  ZZZZZZZ| ZZ       | ZZ|  ZZZZZZ/|  ZZZZZZZ\n" \
+                " |_______/ |__/ \_______/ \_______/| ZZ____/  \_______/|__//ZZZZZZ|__/ \______/  \____  ZZ\n" \
+                "                                   | ZZ                   |______/               /ZZ  \ ZZ\n" \
+               f"                                   | ZZ  \033[1mGEN :\033[0m {datetime.now().strftime('%b %d, %Y @%I:%M %p'):<33}|  ZZZZZZ/\n"     \
+               f"                                   |__/  \033[1mWEEK:\033[0m {self.current_week:0>2}                                \\______/\n\n" \
     
     def get_team_weekly_results(self, roster_id):
         """Get win/loss results for each week for a team"""
@@ -372,15 +377,8 @@ class SleeperCLI:
         """Create power rankings style standings with win/loss game log"""
         standings = self.calculate_standings()
         
-        output = """
- /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]
-| ZZ                                                                                     ZZ
-| ZZ                                    \033[1mSTANDINGS\033[0m                                        ZZ
-| ZZ                                                                                     ZZ
-| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-|_________________________________________________________________________________________/
-
-      Rnk|Team         |1 |2 |3 |4 |5 |6 |7 |8 |9 |10|11|12|13|14|15|16|17|Rec |Pnts"""
+        output = self.create_section_header("\033[1mSTANDINGS\033[0m")
+        output += "      Rnk|Team         |1 |2 |3 |4 |5 |6 |7 |8 |9 |10|11|12|13|14|15|16|17|Rec |Pnts"
         
         for i, team in enumerate(standings):
             rank = i + 1
@@ -423,7 +421,18 @@ class SleeperCLI:
         
         output += "\n"
         return output
-    
+
+    def create_footer(self):
+        commit_hash = get_git_commit_hash()
+        return f" /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]\n" \
+                "| ZZ                                                                                     ZZ\n" \
+               f"| ZZ                      Generated by \033[1msleeper_log\033[0m commit \033[1m#{commit_hash}\033[0m                       ZZ\n" \
+                "| ZZ                      https://github.com/keithalbe/sleeper_log                       ZZ\n" \
+               f"| ZZ                      Vibe coded with: \033[1mSonnet 4\033[0m, \033[1mGPT-5\033[0m, \033[1mCursor\033[0m                       ZZ\n" \
+                "| ZZ                                                                                     ZZ\n" \
+                "| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\n" \
+                "|_________________________________________________________________________________________/\n"
+
     def convert_ansi_to_html(self, text):
         """Convert ANSI color codes to HTML spans"""
         # Replace ANSI color codes with HTML
@@ -456,23 +465,11 @@ class SleeperCLI:
         text_report += self.create_schedule_section()
         text_report += self.create_playoff_picture()
         text_report += self.create_draft_summary()
-        
-        # Footer
-        commit_hash = get_git_commit_hash()
-        text_report += f"""
- /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]
-| ZZ                                                                                     ZZ
-| ZZ                      Generated by \033[1msleeper_log\033[0m commit \033[1m#{commit_hash}\033[0m                       ZZ
-| ZZ                      https://github.com/keithalbe/sleeper_log                       ZZ
-| ZZ                      Vibe coded with: \033[1mSonnet 4\033[0m, \033[1mGPT-5\033[0m, \033[1mCursor\033[0m                       ZZ
-| ZZ                                                                                     ZZ
-| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-|_________________________________________________________________________________________/
-"""
+        text_report += self.create_footer()
         
         # Convert ANSI colors to HTML
         html_content = self.convert_ansi_to_html(text_report)
-        
+
         # Wrap in HTML
         full_html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -554,32 +551,11 @@ class SleeperCLI:
         
         return filename
     
-    def get_rank_emoji(self, rank):
-        """Get emoji for ranking"""
-        if rank == 1:
-            return "🥇"
-        elif rank == 2:
-            return "🥈"
-        elif rank == 3:
-            return "🥉"
-        elif rank <= 6:
-            return "✅"
-        else:
-            return "💀"
-    
     def create_leaders_section(self):
         """Create league leaders section"""
         leaders = self.get_league_leaders()
         
-        output = """
- /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]
-| ZZ                                                                                     ZZ
-| ZZ                                  \033[1mLEAGUE ANALYTICS\033[0m                                   ZZ
-| ZZ                                                                                     ZZ
-| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-|_________________________________________________________________________________________/
-
-"""
+        output = self.create_section_header("\033[1mLEAGUE ANALYTICS\033[0m")
         
         # Highest Scorer
         if leaders['highest_scorer']:
@@ -700,15 +676,7 @@ class SleeperCLI:
     
     def create_roster_section(self):
         """Create team rosters section with side-by-side format"""
-        output = """
- /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]
-| ZZ                                                                                     ZZ
-| ZZ                                \033[1mTEAM ROSTERS\033[0m                                         ZZ
-| ZZ                                                                                     ZZ
-| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-|_________________________________________________________________________________________/
-
-"""
+        output = self.create_section_header("\033[1mTEAM ROSTERS\033[0m")
         
         for roster in self.rosters:
             team_name = self.get_team_name(roster['roster_id'])
@@ -839,61 +807,9 @@ class SleeperCLI:
             
         return output
     
-    def create_fun_stats(self):
-        """Create fun/nerdy statistics section"""
-        leaders = self.get_league_leaders()
-        
-        output = """
- /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-| ZZ                                                                                     ZZ
-| ZZ                                 \033[1mADVANCED STATS\033[0m                                      ZZ
-| ZZ                                                                                     ZZ
-| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-|_________________________________________________________________________________________/
-
-"""
-        
-        # Calculate some fun stats
-        if leaders['consistency_stats']:
-            all_averages = [stats['avg'] for stats in leaders['consistency_stats'].values()]
-            league_average = np.mean(all_averages)
-            
-            output += f"📊 League Average Score: {league_average:.1f} points\n"
-            
-            # Teams above/below average
-            above_avg = sum(1 for avg in all_averages if avg > league_average)
-            below_avg = len(all_averages) - above_avg
-            
-            output += f"📈 Teams Above Average: {above_avg}\n"
-            output += f"📉 Teams Below Average: {below_avg}\n\n"
-            
-            # Score distribution
-            all_scores = []
-            for stats in leaders['consistency_stats'].values():
-                all_scores.extend([stats['high'], stats['low']])
-            
-            if all_scores:
-                output += f"🎯 League High Score: {max(all_scores):.1f}\n"
-                output += f"💀 League Low Score: {min(all_scores):.1f}\n"
-                output += f"📊 Score Range: {max(all_scores) - min(all_scores):.1f} points\n\n"
-        
-        # Matchup records
-        total_matchups = sum(len(matchups) // 2 for matchups in self.matchups.values())
-        output += f"⚔️ Total Matchups Played: {total_matchups}\n"
-        
-        return output
-    
     def create_playoff_picture(self):
         """Render playoff teams and bracket picture if available"""
-        output = """
- /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]
-| ZZ                                                                                     ZZ
-| ZZ                                 \033[1mPLAYOFF PICTURE\033[0m                                     ZZ
-| ZZ                                                                                     ZZ
-| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-|_________________________________________________________________________________________/
-
-"""
+        output = self.create_section_header("\033[1mPLAYOFF PICTURE\033[0m")
 
         if not self.winners_bracket:
             output += "      No playoff bracket data available.\n\n"
@@ -941,15 +857,7 @@ class SleeperCLI:
     
     def create_draft_summary(self):
         """Create draft summary section"""
-        output = """
- /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]
-| ZZ                                                                                     ZZ
-| ZZ                                  \033[1mDRAFT SUMMARY\033[0m                                      ZZ
-| ZZ                                                                                     ZZ
-| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-|_________________________________________________________________________________________/
-
-"""
+        output = self.create_section_header("\033[1mDRAFT SUMMARY\033[0m")
         
         if not self.draft_picks:
             output += "      No draft data available.\n\n"
@@ -998,15 +906,7 @@ class SleeperCLI:
     
     def create_schedule_section(self):
         """Create schedule section showing weekly matchups"""
-        output = """
- /ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ[ - O X]
-| ZZ                                                                                     ZZ
-| ZZ                                   \033[1mSCHEDULE\033[0m                                         ZZ
-| ZZ                                                                                     ZZ
-| ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ
-|_________________________________________________________________________________________/
-
-"""
+        output = self.create_section_header("\033[1mSCHEDULE\033[0m")
         
         if not self.matchups:
             output += "      No schedule data available.\n\n"
