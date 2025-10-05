@@ -10,7 +10,6 @@ from InquirerPy import inquirer
 from typing import List, Dict, Optional
 
 def get_git_commit_hash():
-    """Get the current git commit hash"""
     try:
         result = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], 
                               capture_output=True, text=True, cwd=os.path.dirname(__file__))
@@ -20,7 +19,7 @@ def get_git_commit_hash():
         pass
     return "unknown"
 
-class SleeperCLI:
+class SleeperLog:
     def __init__(self, league_id):
         self.league_id = league_id
         self.base_url = "https://api.sleeper.app/v1"
@@ -35,14 +34,13 @@ class SleeperCLI:
         self.winners_bracket = []
         
     def fetch_league_data(self):
-        """Fetch all necessary data from Sleeper API"""
-        print("🏈 Fetching league data from Sleeper API...")
+        print("Fetching league data from Sleeper API...")
         
         # Get league info
         league_url = f"{self.base_url}/league/{self.league_id}"
         response = requests.get(league_url)
         if response.status_code != 200:
-            raise Exception(f"❌ Failed to fetch league data: {response.status_code}")
+            raise Exception(f"Failed to fetch league data: {response.status_code}")
         self.league_data = response.json()
         
         # Get current week
@@ -53,7 +51,7 @@ class SleeperCLI:
             self.current_week = state_data.get('week', 1)
         
         # Get users
-        print("👥 Fetching users...")
+        print("Fetching users...")
         users_url = f"{self.base_url}/league/{self.league_id}/users"
         users_response = requests.get(users_url)
         if users_response.status_code == 200:
@@ -61,14 +59,14 @@ class SleeperCLI:
             self.users = {user['user_id']: user for user in users_list}
         
         # Get rosters
-        print("📋 Fetching rosters...")
+        print("Fetching rosters...")
         rosters_url = f"{self.base_url}/league/{self.league_id}/rosters"
         rosters_response = requests.get(rosters_url)
         if rosters_response.status_code == 200:
             self.rosters = rosters_response.json()
         
         # Get matchups (fetch all regular season weeks regardless of current NFL week)
-        print("⚔️ Fetching matchups...")
+        print("Fetching matchups...")
         self.matchups = {}
         for week in range(1, 19):  # Weeks 1-18
             matchup_url = f"{self.base_url}/league/{self.league_id}/matchups/{week}"
@@ -80,14 +78,14 @@ class SleeperCLI:
                     self.max_week_with_data = max(self.max_week_with_data, week)
         
         # Get players
-        print("🌟 Fetching player data...")
+        print("Fetching player data...")
         players_url = f"{self.base_url}/players/nfl"
         players_response = requests.get(players_url)
         if players_response.status_code == 200:
             self.players = players_response.json()
 
         # Get winners bracket (playoffs)
-        print("🏆 Fetching winners bracket...")
+        print("Fetching winners bracket...")
         wb_url = f"{self.base_url}/league/{self.league_id}/winners_bracket"
         wb_response = requests.get(wb_url)
         if wb_response.status_code == 200:
@@ -97,7 +95,7 @@ class SleeperCLI:
                 self.winners_bracket = []
         
         # Get draft data
-        print("📋 Fetching draft data...")
+        print("Fetching draft data...")
         draft_url = f"{self.base_url}/league/{self.league_id}/drafts"
         draft_response = requests.get(draft_url)
         if draft_response.status_code == 200:
@@ -123,7 +121,7 @@ class SleeperCLI:
         else:
             self.draft_picks = []
         
-        print("✅ Data fetch complete!")
+        print("Data fetch complete!")
     
     def get_team_name(self, roster_id):
         """Get team name for a roster"""
@@ -141,7 +139,6 @@ class SleeperCLI:
                 f"Team {roster_id}")
     
     def get_player_name(self, player_id):
-        """Get player name from player ID"""
         if not player_id or player_id not in self.players:
             return "Unknown Player"
         
@@ -149,7 +146,6 @@ class SleeperCLI:
         return f"{player.get('first_name', '')} {player.get('last_name', '')}".strip()
     
     def get_player_position_team(self, player_id):
-        """Get player position and team"""
         if not player_id or player_id not in self.players:
             return "UNK", "UNK"
         
@@ -199,7 +195,6 @@ class SleeperCLI:
         return standings
     
     def get_league_leaders(self):
-        """Calculate league leaders"""
         standings = self.calculate_standings()
         
         highest_scorer = max(standings, key=lambda x: x['points_for'])
@@ -334,7 +329,6 @@ class SleeperCLI:
 
     
     def get_team_weekly_results(self, roster_id):
-        """Get win/loss results for each week for a team"""
         weekly_results = []
         
         for week in range(1, 18):  # 17 regular season weeks
@@ -379,7 +373,6 @@ class SleeperCLI:
         return weekly_results
 
     def create_standings_table(self):
-        """Create power rankings style standings with win/loss game log"""
         standings = self.calculate_standings()
         
         output = self.create_section_header("\033[1mSTANDINGS\033[0m")
@@ -439,7 +432,6 @@ class SleeperCLI:
                 "|_________________________________________________________________________________________/\n"
 
     def convert_ansi_to_html(self, text):
-        """Convert ANSI color codes to HTML spans"""
         # Replace ANSI color codes with HTML
         text = text.replace('\033[92m', '<span style="color: #00ff00;">')  # Green
         text = text.replace('\033[91m', '<span style="color: #ff0000;">')  # Red  
@@ -457,8 +449,7 @@ class SleeperCLI:
         
         return text
     
-    def generate_html_report(self, filename="sleeper_report.html"):
-        """Generate HTML version of the report for web viewing"""
+    def generate_html_report(self, filename="sleeper_log.html"):
         print("Generating HTML report...")
         
         # Get the text report
@@ -481,7 +472,7 @@ class SleeperCLI:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{self.league_data.get('name', 'Fantasy League')} - sleeper-cli Report</title>
+    <title>{self.league_data.get('name', 'Fantasy League')} - sleeper_log Report</title>
     <style>
         body {{
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'Courier New', monospace;
@@ -550,14 +541,10 @@ class SleeperCLI:
         # Save HTML file
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(full_html)
-        
-        print(f"🌐 HTML report saved to: {filename}")
-        print(f"   Open in Safari: open {filename}")
-        
+        print(f"HTML report saved to: {filename}")
         return filename
     
     def create_leaders_section(self):
-        """Create league leaders section"""
         leaders = self.get_league_leaders()
         
         output = self.create_section_header("\033[1mLEAGUE ANALYTICS\033[0m")
@@ -647,7 +634,6 @@ class SleeperCLI:
         return output
     
     def get_player_stats(self, player_id, roster_id):
-        """Get player's last week points and projection for upcoming week"""
         last_week_points = 0
         projection = 0
         
@@ -680,7 +666,6 @@ class SleeperCLI:
         return last_week_points, projection
     
     def create_roster_section(self):
-        """Create team rosters section with side-by-side format"""
         output = self.create_section_header("\033[1mTEAM ROSTERS\033[0m")
         
         for roster in self.rosters:
@@ -813,7 +798,6 @@ class SleeperCLI:
         return output
     
     def create_playoff_picture(self):
-        """Render playoff teams and bracket picture if available"""
         output = self.create_section_header("\033[1mPLAYOFF PICTURE\033[0m")
 
         if not self.winners_bracket:
@@ -861,7 +845,6 @@ class SleeperCLI:
         return output
     
     def create_draft_summary(self):
-        """Create draft summary section"""
         output = self.create_section_header("\033[1mDRAFT SUMMARY\033[0m")
         
         if not self.draft_picks:
@@ -910,7 +893,6 @@ class SleeperCLI:
         return output
     
     def create_schedule_section(self):
-        """Create schedule section showing weekly matchups"""
         output = self.create_section_header("\033[1mSCHEDULE\033[0m")
         
         if not self.matchups:
@@ -1044,22 +1026,14 @@ def pick_league(leagues: Dict[int, List[Dict[str, str]]]) -> Optional[Dict[str, 
 
 
 def main():
-    print("""
-                    
-    🏈 Fantasy Football Report Generator 🏆
-    
-    """)
-
-    # Accept the league ID via the --league_id flag or an environment variable
     parser = argparse.ArgumentParser(description="Generate Sleeper fantasy football reports")
     parser.add_argument("--league-id", "-l", dest="league_id", help="Sleeper league ID (overrides LEAGUE_ID env var)")
-    parser.add_argument("--username", "-u", dest="username", help="Sleeper username; overrides league-id")
-    parser.add_argument("--year", "-y", dest="year", help="Season year to narrow down choices")
+    parser.add_argument("--username", "-u", dest="username", help="Sleeper username used to search for leagues (overrides league-id)")
+    parser.add_argument("--year", "-y", dest="year", help="Season year to narrow down league choices (used with --username)")
     args = parser.parse_args()
 
     if args.username:
         selected_league = pick_league(get_leagues_by_username(args.username, season=args.year))
-
         if selected_league:
             args.league_id = selected_league["id"]
         else:
@@ -1067,28 +1041,19 @@ def main():
             return
 
     league_id = args.league_id or os.getenv("LEAGUE_ID")
-
     if not league_id:
-        print("No league ID  or username provided. Set LEAGUE_ID env var or pass --league-id.")
-        print("Example (zsh): export LEAGUE_ID=123456789012345678")
-        print("Or run: python sleeper_log.py --league-id 123456789012345678")
+        print("No league ID or username provided.")
         parser.print_help()
         return
 
     try:
-        # Create report generator
-        cli = SleeperCLI(league_id)
-        
-        # Fetch all data
-        cli.fetch_league_data()
-        
-        # Generate HTML report
-        cli.generate_html_report()
-        
+        sleeper_log = SleeperLog(league_id)
+        sleeper_log.fetch_league_data()
+        sleeper_log.generate_html_report()
         print("\nReport generation complete! See sleeper_log.html")
         
     except Exception as e:
-        print(f"❌ Error generating report: {str(e)}")
+        print(f"Error generating report: {str(e)}")
         import traceback
         traceback.print_exc()
 
