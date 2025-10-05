@@ -316,17 +316,20 @@ class SleeperCLI:
         }
     
     def create_ascii_header(self):
-        return f"            /ZZ  \033[1mLEAGUE:\033[0m {self.league_data.get('name', '?'):<39}   /ZZ      \n" \
-               f"           | ZZ  \033[1mSEASON:\033[0m {self.league_data.get('season', '?'):<41}| ZZ      \n" \
-                "   /ZZZZZZZ| ZZ  /ZZZZZZ   /ZZZZZZ   /ZZZZZZ   /ZZZZZZ   /ZZZZZZ  | ZZ  /ZZZZZZ   /ZZZZZZ \n" \
-                "  /ZZ_____/| ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ | ZZ /ZZ__  ZZ /ZZ__  ZZ\n" \
-                " |  ZZZZZZ | ZZ| ZZZZZZZZ| ZZZZZZZZ| ZZ  \ ZZ| ZZZZZZZZ| ZZ  \__/ | ZZ| ZZ  \ ZZ| ZZ  \ ZZ\n" \
-                "  \____  ZZ| ZZ| ZZ_____/| ZZ_____/| ZZ  | ZZ| ZZ_____/| ZZ       | ZZ| ZZ  | ZZ| ZZ  | ZZ\n" \
-                "  /ZZZZZZZ/| ZZ|  ZZZZZZZ|  ZZZZZZZ| ZZZZZZZ/|  ZZZZZZZ| ZZ       | ZZ|  ZZZZZZ/|  ZZZZZZZ\n" \
-                " |_______/ |__/ \_______/ \_______/| ZZ____/  \_______/|__//ZZZZZZ|__/ \______/  \____  ZZ\n" \
-                "                                   | ZZ                   |______/               /ZZ  \ ZZ\n" \
-               f"                                   | ZZ  \033[1mGEN :\033[0m {datetime.now().strftime('%b %d, %Y @%I:%M %p'):<33}|  ZZZZZZ/\n"     \
-               f"                                   |__/  \033[1mWEEK:\033[0m {self.current_week:0>2}                                \\______/\n\n" \
+        return (
+            f"            /ZZ  \033[1mLEAGUE:\033[0m {self.league_data.get('name', '?'):<39}   /ZZ      \n"
+            f"           | ZZ  \033[1mSEASON:\033[0m {self.league_data.get('season', '?'):<41}| ZZ      \n"
+            "   /ZZZZZZZ| ZZ  /ZZZZZZ   /ZZZZZZ   /ZZZZZZ   /ZZZZZZ   /ZZZZZZ  | ZZ  /ZZZZZZ   /ZZZZZZ \n"
+            "  /ZZ_____/| ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ /ZZ__  ZZ | ZZ /ZZ__  ZZ /ZZ__  ZZ\n"
+            " |  ZZZZZZ | ZZ| ZZZZZZZZ| ZZZZZZZZ| ZZ  \\ ZZ| ZZZZZZZZ| ZZ  \\__/ | ZZ| ZZ  \\ ZZ| ZZ  \\ ZZ\n"
+            "  \\____  ZZ| ZZ| ZZ_____/| ZZ_____/| ZZ  | ZZ| ZZ_____/| ZZ       | ZZ| ZZ  | ZZ| ZZ  | ZZ\n"
+            "  /ZZZZZZZ/| ZZ|  ZZZZZZZ|  ZZZZZZZ| ZZZZZZZ/|  ZZZZZZZ| ZZ       | ZZ|  ZZZZZZ/|  ZZZZZZZ\n"
+            " |_______/ |__/ \\_______/ \\_______/| ZZ____/  \\_______/|__//ZZZZZZ|__/ \\______/  \\____  ZZ\n"
+            "                                   | ZZ                   |______/               /ZZ  \\ ZZ\n"
+            f"                                   | ZZ  \033[1mGEN :\033[0m {datetime.now().strftime('%b %d, %Y @%I:%M %p'):<33}|  ZZZZZZ/\n"
+            f"                                   |__/  \033[1mWEEK:\033[0m {self.current_week:0>2}                                \\______/\n\n"
+        )
+
     
     def get_team_weekly_results(self, roster_id):
         """Get win/loss results for each week for a team"""
