@@ -6,6 +6,8 @@ import numpy as np
 import os
 import argparse
 import subprocess
+from InquirerPy import inquirer
+from typing import List, Dict, Optional
 
 def get_git_commit_hash():
     """Get the current git commit hash"""
@@ -955,25 +957,124 @@ class SleeperCLI:
         
         return output
 
+
+def get_leagues_by_username(
+    username: str,
+    sport: str = "nfl",
+    season: Optional[str] = None,
+    start_year: Optional[int] = None,
+    end_year: Optional[int] = None
+) -> Optional[Dict[int, List[Dict[str, str]]]]:
+    """
+    Fetch all leagues for a given Sleeper username.
+    
+    Args:
+        username: The Sleeper username
+        sport: The sport (default: "nfl")
+        season: The season year (default: "2024")
+        start_year: if season is not defined start search here (2017 is when sleeper launched)
+        end_year: if season is not defined end search here
+
+    Returns:
+        List of league dictionaries, or None if user not found
+    """
+    user_url = f"https://api.sleeper.app/v1/user/{username}"
+
+    # If seaon is not specified, use start_year and end_year
+    if season is None:
+        start_year = start_year or 2017
+        end_year = end_year or datetime.now().year
+    else:
+        start_year = end_year = int(season)
+
+    try:
+        user_response = requests.get(user_url)
+        user_response.raise_for_status()
+        user_data = user_response.json()
+
+        if not user_data or 'user_id' not in user_data:
+            print(f"User '{username}' not found.")
+            return None
+
+        user_id = user_data['user_id']
+        leagues_info = defaultdict(list)
+
+        for year in range(start_year, end_year + 1):
+            leagues_url = f"https://api.sleeper.app/v1/user/{user_id}/leagues/{sport}/{year}"
+            response = requests.get(leagues_url)
+
+            if response.status_code == 200:
+                for league in response.json():
+                    leagues_info[year].append({
+                        "name": league.get("name", "Unnamed League"),
+                        "id": league.get("league_id", "Unknown ID")
+                    })
+
+        return leagues_info
+
+    except requests.RequestException as e:
+        print(f"Error fetching data: {e}")
+        return None
+
+
+def pick_league(leagues: Dict[int, List[Dict[str, str]]]) -> Optional[Dict[str, str]]:
+    # Flatten and reverse the list of leagues with year info
+    all_leagues = [(year, league) for year in sorted(leagues.keys(), reverse=True) for league in leagues[year]]
+
+    if not all_leagues:
+        print("0 leagues found.")
+        return None
+
+    # If only one result, no need to choose by user
+    if len(all_leagues) == 1:
+        return all_leagues[0][1]
+
+    # Create a mapping from label to league
+    label_to_league = {
+        f'{year}: {league["name"]} (id: {league["id"]})': league
+        for year, league in all_leagues
+    }
+
+    selected_label = inquirer.select(
+        message="Choose a league:",
+        choices=list(label_to_league.keys())
+    ).execute()
+
+    return label_to_league[selected_label]
+
+
 def main():
     print("""
                     
     🏈 Fantasy Football Report Generator 🏆
     
     """)
-    
+
     # Accept the league ID via the --league_id flag or an environment variable
     parser = argparse.ArgumentParser(description="Generate Sleeper fantasy football reports")
     parser.add_argument("--league-id", "-l", dest="league_id", help="Sleeper league ID (overrides LEAGUE_ID env var)")
+    parser.add_argument("--username", "-u", dest="username", help="Sleeper username; overrides league-id")
+    parser.add_argument("--year", "-y", dest="year", help="Season year to narrow down choices")
     args = parser.parse_args()
-    
+
+    if args.username:
+        selected_league = pick_league(get_leagues_by_username(args.username, season=args.year))
+
+        if selected_league:
+            args.league_id = selected_league["id"]
+        else:
+            print(f"No leagues found for {args.username}")
+            return
+
     league_id = args.league_id or os.getenv("LEAGUE_ID")
+
     if not league_id:
-        print("No league ID provided. Set LEAGUE_ID env var or pass --league-id.")
+        print("No league ID  or username provided. Set LEAGUE_ID env var or pass --league-id.")
         print("Example (zsh): export LEAGUE_ID=123456789012345678")
         print("Or run: python sleeper_log.py --league-id 123456789012345678")
+        parser.print_help()
         return
-    
+
     try:
         # Create report generator
         cli = SleeperCLI(league_id)
